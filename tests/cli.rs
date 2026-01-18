@@ -550,3 +550,92 @@ fn test_cli_process_mixed_grouped_and_separate() {
         stdout
     );
 }
+
+// ============================================
+// Tests for skill-install command
+// ============================================
+
+#[test]
+fn test_cli_skill_install_help() {
+    // Given: The skill-install subcommand
+    let output = Command::new(binary_path())
+        .args(["skill-install", "--help"])
+        .output()
+        .expect("Failed to execute command");
+
+    // Then: Help is displayed
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("--dir") || stdout.contains("-d"),
+        "skill-install help should mention --dir option: {}",
+        stdout
+    );
+    assert!(
+        output.status.success(),
+        "skill-install help should exit with success"
+    );
+}
+
+#[test]
+fn test_cli_skill_install_creates_files() {
+    // Given: A temporary directory
+    let temp_dir = tempfile::tempdir().unwrap();
+    let skills_dir = temp_dir.path().join("my-skills");
+
+    // When: We run skill-install with custom directory
+    let output = Command::new(binary_path())
+        .args(["skill-install", "--dir", skills_dir.to_str().unwrap()])
+        .output()
+        .expect("Failed to execute command");
+
+    // Then: The command succeeds
+    assert!(
+        output.status.success(),
+        "skill-install should succeed. stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    // And the skill file is created
+    let skill_file = skills_dir.join("csl-format").join("SKILL.md");
+    assert!(skill_file.exists(), "SKILL.md should be created");
+
+    // And it contains the expected content
+    let content = fs::read_to_string(&skill_file).unwrap();
+    assert!(
+        content.contains("name: csl-format"),
+        "SKILL.md should contain the skill name"
+    );
+    assert!(
+        content.contains("csl-tools"),
+        "SKILL.md should reference csl-tools"
+    );
+}
+
+#[test]
+fn test_cli_skill_install_default_directory() {
+    // Given: A temporary directory to run in
+    let temp_dir = tempfile::tempdir().unwrap();
+
+    // When: We run skill-install without --dir (uses default .claude/skills)
+    let output = Command::new(binary_path())
+        .args(["skill-install"])
+        .current_dir(temp_dir.path())
+        .output()
+        .expect("Failed to execute command");
+
+    // Then: The command succeeds
+    assert!(
+        output.status.success(),
+        "skill-install should succeed. stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    // And the skill file is created in default location
+    let skill_file = temp_dir
+        .path()
+        .join(".claude/skills/csl-format/SKILL.md");
+    assert!(
+        skill_file.exists(),
+        "SKILL.md should be created in default location"
+    );
+}

@@ -49,6 +49,13 @@ enum Commands {
         #[arg(long, default_value = "## References")]
         bib_header: String,
     },
+
+    /// Install the Claude Code skill for citation formatting
+    SkillInstall {
+        /// Installation directory (default: .claude/skills in current directory)
+        #[arg(short, long)]
+        dir: Option<PathBuf>,
+    },
 }
 
 fn main() {
@@ -78,6 +85,9 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                 no_bib,
                 &bib_header,
             )?;
+        }
+        Commands::SkillInstall { dir } => {
+            skill_install_command(dir.as_deref())?;
         }
     }
 
@@ -160,6 +170,49 @@ fn process_command(
         let mut handle = stdout.lock();
         writeln!(handle, "{}", result)?;
     }
+
+    Ok(())
+}
+
+/// The embedded Claude Code skill content
+const SKILL_CONTENT: &str = include_str!("skill.md");
+
+/// Install the Claude Code skill for citation formatting.
+fn skill_install_command(dir: Option<&Path>) -> Result<(), Box<dyn std::error::Error>> {
+    // Determine installation directory
+    let base_dir = if let Some(d) = dir {
+        d.to_path_buf()
+    } else {
+        PathBuf::from(".claude/skills")
+    };
+
+    let skill_dir = base_dir.join("csl-format");
+
+    // Create directory if it doesn't exist
+    fs::create_dir_all(&skill_dir).map_err(|e| {
+        format!(
+            "Failed to create skill directory '{}': {}",
+            skill_dir.display(),
+            e
+        )
+    })?;
+
+    // Write the skill file
+    let skill_path = skill_dir.join("SKILL.md");
+    fs::write(&skill_path, SKILL_CONTENT).map_err(|e| {
+        format!(
+            "Failed to write skill file '{}': {}",
+            skill_path.display(),
+            e
+        )
+    })?;
+
+    println!("Claude Code skill installed successfully!");
+    println!("  Location: {}", skill_path.display());
+    println!();
+    println!("The skill is now available in Claude Code when working in this directory.");
+    println!("Use it by asking Claude to format your citations, or invoke it with:");
+    println!("  /csl-format");
 
     Ok(())
 }
