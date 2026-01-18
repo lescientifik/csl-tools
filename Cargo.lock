@@ -136,6 +136,7 @@ dependencies = [
 [[package]]
 name = "csl_proc"
 version = "0.1.0"
+source = "git+https://github.com/lescientifik/csl_proc.git#172c6fc7796986abe7d6a32e047bb0e8eed7b8e6"
 dependencies = [
  "quick-xml",
  "serde",

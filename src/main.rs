@@ -74,7 +74,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                 &input,
                 &bib,
                 &csl,
-                output.as_ref().map(|p| p.as_path()),
+                output.as_deref(),
                 no_bib,
                 &bib_header,
             )?;

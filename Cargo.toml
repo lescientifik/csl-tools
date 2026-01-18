@@ -9,7 +9,7 @@ keywords = ["csl", "citation", "bibliography", "markdown", "cli"]
 categories = ["command-line-utilities", "text-processing"]
 
 [dependencies]
-csl_proc = { path = "../csl_proc" }  # Switch to git = "..." for release
+csl_proc = { git = "https://github.com/lescientifik/csl_proc.git" }
 clap = { version = "4", features = ["derive"] }
 regex = "1"
 serde = { version = "1.0", features = ["derive"] }
