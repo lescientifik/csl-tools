@@ -1,0 +1,9 @@
+name = "Simple citation"
+test_type = "parsing"
+
+markdown = """
+Les résultats montrent [@item-1] que la méthode fonctionne.
+"""
+
+# For parsing tests, expected lists the citation IDs that should be found
+expected = "item-1"

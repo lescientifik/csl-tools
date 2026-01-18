@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<style xmlns="http://purl.org/net/xbiblio/csl" class="in-text" version="1.0">
+  <info>
+    <title>Minimal Test Style</title>
+    <id>minimal-test</id>
+    <updated>2024-01-01T00:00:00+00:00</updated>
+  </info>
+  <citation>
+    <layout prefix="(" suffix=")" delimiter="; ">
+      <names variable="author">
+        <name form="short"/>
+      </names>
+      <text prefix=", " variable="issued" date-parts="year"/>
+    </layout>
+  </citation>
+  <bibliography>
+    <layout>
+      <names variable="author"/>
+      <text variable="title"/>
+    </layout>
+  </bibliography>
+</style>

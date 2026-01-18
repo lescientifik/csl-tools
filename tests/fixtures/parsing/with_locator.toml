@@ -1,0 +1,9 @@
+name = "Citation with page locator"
+test_type = "parsing"
+
+markdown = """
+Voir [@book-1, p. 42] pour plus de détails.
+"""
+
+# Citation with locator
+expected = "book-1"

@@ -1,0 +1,21 @@
+[package]
+name = "csl-tools"
+version = "0.1.0"
+edition = "2021"
+description = "CLI tool for formatting citations and bibliographies in Markdown documents"
+license = "MIT"
+repository = "https://github.com/lescientifik/csl-tools"
+keywords = ["csl", "citation", "bibliography", "markdown", "cli"]
+categories = ["command-line-utilities", "text-processing"]
+
+[dependencies]
+csl_proc = { path = "../csl_proc" }  # Switch to git = "..." for release
+clap = { version = "4", features = ["derive"] }
+regex = "1"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+thiserror = "1.0"
+
+[dev-dependencies]
+toml = "0.8"
+tempfile = "3"

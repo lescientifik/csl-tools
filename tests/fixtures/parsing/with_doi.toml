@@ -1,0 +1,11 @@
+name = "Citation with DOI URL"
+test_type = "parsing"
+
+markdown = """
+Les coronavirus [@pmid:33024307](https://doi.org/10.1038/s41579-020-00459-7) sont étudiés.
+"""
+
+# Expected citation ID
+expected_id = "pmid:33024307"
+# Expected URL
+expected_url = "https://doi.org/10.1038/s41579-020-00459-7"

@@ -1,0 +1,9 @@
+name = "Citation with page range"
+test_type = "parsing"
+
+markdown = """
+Cette section [@article-1, pp. 10-20] décrit la méthodologie.
+"""
+
+# Citation with page range
+expected = "article-1"

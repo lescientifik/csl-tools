@@ -1,0 +1,31 @@
+name = "Invalid JSON references"
+test_type = "error"
+
+markdown = """
+Une citation [@item-1] avec des références invalides.
+"""
+
+# Invalid JSON - missing closing bracket
+refs = """
+[{"id": "item-1", "type": "book"
+"""
+
+style = """
+<style xmlns="http://purl.org/net/xbiblio/csl" class="in-text" version="1.0">
+  <info>
+    <id>test-style</id>
+    <title>Test Style</title>
+    <updated>2024-01-01T00:00:00+00:00</updated>
+  </info>
+  <citation>
+    <layout prefix="(" suffix=")">
+      <names variable="author"><name form="short"/></names>
+    </layout>
+  </citation>
+  <bibliography>
+    <layout><names variable="author"/></layout>
+  </bibliography>
+</style>
+"""
+
+expected_error = "JSON"

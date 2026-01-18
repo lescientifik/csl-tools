@@ -1,0 +1,9 @@
+name = "PMID format citation key"
+test_type = "parsing"
+
+markdown = """
+L'étude [@pmid:12345678] a démontré ces résultats.
+"""
+
+# Citation with PMID prefix
+expected = "pmid:12345678"
