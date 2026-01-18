@@ -102,8 +102,22 @@ csl-tools process input.md --bib refs.json --csl apa.csl --format markdown -o ou
 | Option | Description |
 |--------|-------------|
 | `-o, --output <file>` | Output file (default: stdout) |
-| `--format <fmt>` | Output format: `html` (default), `markdown` |
-| `--locale <code>` | Locale for terms: `en-US`, `fr-FR`, etc. |
+| `--no-bib` | Don't include bibliography at the end |
+| `--bib-header <text>` | Custom bibliography header (default: `## References`) |
+
+### Claude Code Integration
+
+Install a Claude Code skill for AI-assisted citation formatting:
+
+```bash
+# Install the skill in your project
+csl-tools skill-install
+
+# Or specify a custom directory
+csl-tools skill-install --dir /path/to/skills
+```
+
+Once installed, use `/csl-format` in Claude Code to get guided assistance with citation formatting.
 
 ## Citation Syntax
 
@@ -140,7 +154,57 @@ Studies show [@pmid:33024307](https://doi.org/10.1038/s41579-020-00459-7) that..
 
 The DOI link is clickable in your editor but removed in the final output.
 
-## PubMed Workflow
+## Integration with pm-tools
+
+[pm-tools](https://github.com/lescientifik/pm-tools) is a companion CLI suite for searching and fetching PubMed articles. Together, they provide a complete workflow for scientific writing.
+
+### Search, cite, and format in one pipeline
+
+```bash
+# Search PubMed and generate bibliography
+pm-search "CRISPR gene therapy" | pm-fetch | pm-cite > refs.jsonl
+
+# Format your article
+csl-tools process article.md --bib refs.jsonl --csl nature.csl -o article.html
+```
+
+### Build a bibliography from PMIDs
+
+```bash
+# Generate CSL-JSON for specific articles
+pm-cite 33024307 29355051 38461394 > refs.jsonl
+
+# Use in your document with [@pmid:33024307] syntax
+csl-tools process article.md --bib refs.jsonl --csl apa.csl -o output.html
+```
+
+### Interactive article selection with fzf
+
+```bash
+# Search, preview, select articles interactively, then generate citations
+pm-search "PET imaging biomarkers" | pm-fetch | pm-parse | \
+  pm-show --fzf | pm-cite > refs.jsonl
+```
+
+### Complete research workflow
+
+```bash
+# 1. Search and save parsed results for offline use
+pm-search "immunotherapy melanoma" | pm-fetch | pm-parse > articles.jsonl
+
+# 2. Filter by year and journal
+pm-filter --year 2023-2025 --journal "Nature" < articles.jsonl > filtered.jsonl
+
+# 3. Generate citations for selected articles
+jq -r '.pmid' filtered.jsonl | pm-cite > refs.jsonl
+
+# 4. Format your manuscript
+csl-tools process manuscript.md --bib refs.jsonl --csl cell.csl -o manuscript.html
+```
+
+## PubMed Workflow (without pm-tools)
+
+If you prefer using the PubMed API directly:
 
 ### 1. Fetch references from PubMed API
 
