@@ -12,8 +12,6 @@ pub enum StyleError {
     #[error("Failed to read file: {0}")]
     IoError(#[from] std::io::Error),
 
-    #[error("Invalid CSL style: {0}")]
-    InvalidStyle(String),
 }
 
 /// Loads a CSL style from a file.
@@ -34,25 +32,28 @@ pub fn load_style(path: &Path) -> Result<String, StyleError> {
     Ok(content)
 }
 
+/// Single source of truth for builtin styles: (name, CSL XML content).
+const BUILTIN_STYLES: &[(&str, &str)] = &[("minimal", MINIMAL_STYLE)];
+
 /// Returns a built-in style by name.
 ///
 /// # Arguments
 ///
-/// * `name` - The name of the built-in style (e.g., "apa", "ieee")
+/// * `name` - The name of the built-in style (e.g., "minimal")
 ///
 /// # Returns
 ///
 /// The CSL XML content if the style exists, or None.
 pub fn builtin_style(name: &str) -> Option<&'static str> {
-    match name {
-        "minimal" => Some(MINIMAL_STYLE),
-        _ => None,
-    }
+    BUILTIN_STYLES
+        .iter()
+        .find(|(n, _)| *n == name)
+        .map(|(_, content)| *content)
 }
 
 /// Returns the list of available builtin style names.
-pub fn builtin_style_names() -> &'static [&'static str] {
-    &["minimal"]
+pub fn builtin_style_names() -> Vec<&'static str> {
+    BUILTIN_STYLES.iter().map(|(n, _)| *n).collect()
 }
 
 /// Minimal CSL style for testing purposes.
@@ -190,5 +191,31 @@ mod tests {
             content.contains("<citation>"),
             "Should contain citation element"
         );
+    }
+
+    // ============================================
+    // Tests for builtin_style_names() sync
+    // ============================================
+
+    #[test]
+    fn test_builtin_style_names_returns_non_empty_list() {
+        let names = builtin_style_names();
+        assert!(
+            !names.is_empty(),
+            "builtin_style_names() should return at least one style"
+        );
+    }
+
+    #[test]
+    fn test_builtin_style_names_all_resolve() {
+        // Every name listed by builtin_style_names() must be recognized by builtin_style()
+        for name in builtin_style_names() {
+            assert!(
+                builtin_style(name).is_some(),
+                "builtin_style_names() lists '{}' but builtin_style('{}') returns None",
+                name,
+                name
+            );
+        }
     }
 }

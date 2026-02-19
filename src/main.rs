@@ -10,8 +10,8 @@ use clap::{Parser, Subcommand};
 
 use csl_tools::{
     builtin_style, extract_citation_clusters, extract_citations, format_bibliography,
-    format_citations_clusters, generate_output, load_refs, load_style, replace_citations,
-    style::builtin_style_names,
+    format_citations_clusters, generate_output, load_refs, load_style,
+    processor::ProcessorError, replace_citations, style::builtin_style_names,
 };
 
 // ---------------------------------------------------------------------------
@@ -230,14 +230,8 @@ fn process_command(
     let clusters = extract_citation_clusters(&markdown);
 
     // 5. Format citation clusters via csl_proc
-    let processed = format_citations_clusters(&clusters, &refs_json, &style_csl).map_err(|e| {
-        let msg = e.to_string();
-        if msg.contains("Reference not found") {
-            AppError::ReferenceNotFound(msg)
-        } else {
-            AppError::CslProcessing(msg)
-        }
-    })?;
+    let processed =
+        format_citations_clusters(&clusters, &refs_json, &style_csl).map_err(map_processor_error)?;
 
     // 6. Replace citations in text
     let content = replace_citations(&markdown, &processed);
@@ -247,14 +241,8 @@ fn process_command(
     let bibliography = if no_bib {
         None
     } else {
-        let bib_html = format_bibliography(&citations, &refs_json, &style_csl).map_err(|e| {
-            let msg = e.to_string();
-            if msg.contains("Reference not found") {
-                AppError::ReferenceNotFound(msg)
-            } else {
-                AppError::CslProcessing(msg)
-            }
-        })?;
+        let bib_html =
+            format_bibliography(&citations, &refs_json, &style_csl).map_err(map_processor_error)?;
         if bib_html.is_empty() {
             None
         } else {
@@ -284,6 +272,14 @@ fn process_command(
     }
 
     Ok(())
+}
+
+/// Maps a ProcessorError to an AppError using type-safe matching.
+fn map_processor_error(e: ProcessorError) -> AppError {
+    match e {
+        ProcessorError::ReferenceNotFound(_) => AppError::ReferenceNotFound(e.to_string()),
+        _ => AppError::CslProcessing(e.to_string()),
+    }
 }
 
 /// List available builtin CSL styles.
