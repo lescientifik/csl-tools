@@ -20,8 +20,6 @@ pub enum ProcessorError {
     #[error("Invalid JSON: {0}")]
     InvalidJson(String),
 
-    #[error("Invalid style: {0}")]
-    InvalidStyle(String),
 }
 
 /// A citation that has been formatted by csl_proc.

@@ -5,7 +5,7 @@
 use std::fs;
 use std::io::Write;
 use std::path::PathBuf;
-use std::process::Command;
+use std::process::{Command, Stdio};
 use tempfile::NamedTempFile;
 
 /// Path to the compiled binary
@@ -552,90 +552,371 @@ fn test_cli_process_mixed_grouped_and_separate() {
 }
 
 // ============================================
-// Tests for skill-install command
+// Tests for exit codes (semantic: 10-15)
 // ============================================
 
 #[test]
-fn test_cli_skill_install_help() {
-    // Given: The skill-install subcommand
+fn test_exit_code_10_input_file_not_found() {
+    let refs_file = create_temp_file(TEST_REFS, ".json");
+    let style_file = create_temp_file(TEST_STYLE, ".csl");
+
     let output = Command::new(binary_path())
-        .args(["skill-install", "--help"])
+        .args([
+            "process",
+            "/nonexistent/path/article.md",
+            "--bib",
+            refs_file.path().to_str().unwrap(),
+            "--csl",
+            style_file.path().to_str().unwrap(),
+        ])
         .output()
         .expect("Failed to execute command");
 
-    // Then: Help is displayed
+    assert_eq!(
+        output.status.code(),
+        Some(10),
+        "Missing input file should exit with code 10, got {:?}. stderr: {}",
+        output.status.code(),
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+#[test]
+fn test_exit_code_11_bib_file_not_found() {
+    let markdown = "See [@item-1].";
+    let md_file = create_temp_file(markdown, ".md");
+    let style_file = create_temp_file(TEST_STYLE, ".csl");
+
+    let output = Command::new(binary_path())
+        .args([
+            "process",
+            md_file.path().to_str().unwrap(),
+            "--bib",
+            "/nonexistent/refs.json",
+            "--csl",
+            style_file.path().to_str().unwrap(),
+        ])
+        .output()
+        .expect("Failed to execute command");
+
+    assert_eq!(
+        output.status.code(),
+        Some(11),
+        "Missing bib file should exit with code 11, got {:?}. stderr: {}",
+        output.status.code(),
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+#[test]
+fn test_exit_code_12_style_not_found() {
+    let markdown = "See [@item-1].";
+    let md_file = create_temp_file(markdown, ".md");
+    let refs_file = create_temp_file(TEST_REFS, ".json");
+
+    let output = Command::new(binary_path())
+        .args([
+            "process",
+            md_file.path().to_str().unwrap(),
+            "--bib",
+            refs_file.path().to_str().unwrap(),
+            "--csl",
+            "nonexistent-style-name",
+        ])
+        .output()
+        .expect("Failed to execute command");
+
+    assert_eq!(
+        output.status.code(),
+        Some(12),
+        "Unknown style should exit with code 12, got {:?}. stderr: {}",
+        output.status.code(),
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+#[test]
+fn test_exit_code_13_reference_not_found() {
+    let markdown = "See [@unknown-key].";
+    let md_file = create_temp_file(markdown, ".md");
+    let refs_file = create_temp_file(TEST_REFS, ".json");
+    let style_file = create_temp_file(TEST_STYLE, ".csl");
+
+    let output = Command::new(binary_path())
+        .args([
+            "process",
+            md_file.path().to_str().unwrap(),
+            "--bib",
+            refs_file.path().to_str().unwrap(),
+            "--csl",
+            style_file.path().to_str().unwrap(),
+        ])
+        .output()
+        .expect("Failed to execute command");
+
+    assert_eq!(
+        output.status.code(),
+        Some(13),
+        "Unknown citation key should exit with code 13, got {:?}. stderr: {}",
+        output.status.code(),
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+#[test]
+fn test_exit_code_15_output_dir_not_writable() {
+    let markdown = "See [@item-1].";
+    let md_file = create_temp_file(markdown, ".md");
+    let refs_file = create_temp_file(TEST_REFS, ".json");
+    let style_file = create_temp_file(TEST_STYLE, ".csl");
+
+    let output = Command::new(binary_path())
+        .args([
+            "process",
+            md_file.path().to_str().unwrap(),
+            "--bib",
+            refs_file.path().to_str().unwrap(),
+            "--csl",
+            style_file.path().to_str().unwrap(),
+            "-o",
+            "/nonexistent/dir/output.md",
+        ])
+        .output()
+        .expect("Failed to execute command");
+
+    assert_eq!(
+        output.status.code(),
+        Some(15),
+        "Unwritable output path should exit with code 15, got {:?}. stderr: {}",
+        output.status.code(),
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+// ============================================
+// Tests for stdin support
+// ============================================
+
+#[test]
+fn test_stdin_support() {
+    let refs_file = create_temp_file(TEST_REFS, ".json");
+    let style_file = create_temp_file(TEST_STYLE, ".csl");
+    let markdown_input = "Les resultats montrent [@item-1] que la methode fonctionne.";
+
+    let mut child = Command::new(binary_path())
+        .args([
+            "process",
+            "-",
+            "--bib",
+            refs_file.path().to_str().unwrap(),
+            "--csl",
+            style_file.path().to_str().unwrap(),
+        ])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("Failed to spawn command");
+
+    {
+        let stdin = child.stdin.as_mut().expect("Failed to open stdin");
+        stdin
+            .write_all(markdown_input.as_bytes())
+            .expect("Failed to write to stdin");
+    }
+
+    let output = child.wait_with_output().expect("Failed to wait on child");
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
-        stdout.contains("--dir") || stdout.contains("-d"),
-        "skill-install help should mention --dir option: {}",
+        output.status.success(),
+        "Process from stdin should succeed. stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(
+        stdout.contains("Doe"),
+        "Output should contain formatted citation from stdin input: {}",
         stdout
     );
+}
+
+// ============================================
+// Tests for styles subcommand
+// ============================================
+
+#[test]
+fn test_styles_subcommand() {
+    let output = Command::new(binary_path())
+        .arg("styles")
+        .output()
+        .expect("Failed to execute command");
+
     assert!(
         output.status.success(),
-        "skill-install help should exit with success"
+        "styles subcommand should succeed. stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("minimal"),
+        "styles output should list 'minimal' builtin style, got: {}",
+        stdout
+    );
+
+    assert_eq!(
+        output.status.code(),
+        Some(0),
+        "styles subcommand should exit with code 0"
+    );
+}
+
+// ============================================
+// Tests for error hints
+// ============================================
+
+#[test]
+fn test_error_hint_input_file() {
+    let refs_file = create_temp_file(TEST_REFS, ".json");
+    let style_file = create_temp_file(TEST_STYLE, ".csl");
+
+    let output = Command::new(binary_path())
+        .args([
+            "process",
+            "/nonexistent/article.md",
+            "--bib",
+            refs_file.path().to_str().unwrap(),
+            "--csl",
+            style_file.path().to_str().unwrap(),
+        ])
+        .output()
+        .expect("Failed to execute command");
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("hint:"),
+        "stderr should contain a hint, got: {}",
+        stderr
     );
 }
 
 #[test]
-fn test_cli_skill_install_creates_files() {
-    // Given: A temporary directory
-    let temp_dir = tempfile::tempdir().unwrap();
-    let skills_dir = temp_dir.path().join("my-skills");
+fn test_error_hint_style_lists_builtin_names() {
+    let markdown = "See [@item-1].";
+    let md_file = create_temp_file(markdown, ".md");
+    let refs_file = create_temp_file(TEST_REFS, ".json");
 
-    // When: We run skill-install with custom directory
     let output = Command::new(binary_path())
-        .args(["skill-install", "--dir", skills_dir.to_str().unwrap()])
+        .args([
+            "process",
+            md_file.path().to_str().unwrap(),
+            "--bib",
+            refs_file.path().to_str().unwrap(),
+            "--csl",
+            "totally-fake-style",
+        ])
         .output()
         .expect("Failed to execute command");
 
-    // Then: The command succeeds
+    let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
-        output.status.success(),
-        "skill-install should succeed. stderr: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-
-    // And the skill file is created
-    let skill_file = skills_dir.join("csl-format").join("SKILL.md");
-    assert!(skill_file.exists(), "SKILL.md should be created");
-
-    // And it contains the expected content
-    let content = fs::read_to_string(&skill_file).unwrap();
-    assert!(
-        content.contains("name: csl-format"),
-        "SKILL.md should contain the skill name"
+        stderr.contains("available builtin styles:"),
+        "stderr should list available builtin styles, got: {}",
+        stderr
     );
     assert!(
-        content.contains("csl-tools"),
-        "SKILL.md should reference csl-tools"
+        stderr.contains("minimal"),
+        "stderr should mention 'minimal' as available style, got: {}",
+        stderr
     );
 }
 
 #[test]
-fn test_cli_skill_install_default_directory() {
-    // Given: A temporary directory to run in
-    let temp_dir = tempfile::tempdir().unwrap();
+fn test_error_hint_reference_not_found() {
+    let markdown = "See [@nonexistent-key].";
+    let md_file = create_temp_file(markdown, ".md");
+    let refs_file = create_temp_file(TEST_REFS, ".json");
+    let style_file = create_temp_file(TEST_STYLE, ".csl");
 
-    // When: We run skill-install without --dir (uses default .claude/skills)
     let output = Command::new(binary_path())
-        .args(["skill-install"])
-        .current_dir(temp_dir.path())
+        .args([
+            "process",
+            md_file.path().to_str().unwrap(),
+            "--bib",
+            refs_file.path().to_str().unwrap(),
+            "--csl",
+            style_file.path().to_str().unwrap(),
+        ])
         .output()
         .expect("Failed to execute command");
 
-    // Then: The command succeeds
+    let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
-        output.status.success(),
-        "skill-install should succeed. stderr: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-
-    // And the skill file is created in default location
-    let skill_file = temp_dir
-        .path()
-        .join(".claude/skills/csl-format/SKILL.md");
-    assert!(
-        skill_file.exists(),
-        "SKILL.md should be created in default location"
+        stderr.contains("hint: check that this citation key exists"),
+        "stderr should contain reference-not-found hint, got: {}",
+        stderr
     );
 }
+
+// ============================================
+// Tests for confirmation message on stderr
+// ============================================
+
+#[test]
+fn test_success_confirmation_message_on_stderr() {
+    let markdown = "Les resultats montrent [@item-1].";
+    let md_file = create_temp_file(markdown, ".md");
+    let refs_file = create_temp_file(TEST_REFS, ".json");
+    let style_file = create_temp_file(TEST_STYLE, ".csl");
+    let output_file = tempfile::Builder::new().suffix(".md").tempfile().unwrap();
+
+    let output = Command::new(binary_path())
+        .args([
+            "process",
+            md_file.path().to_str().unwrap(),
+            "--bib",
+            refs_file.path().to_str().unwrap(),
+            "--csl",
+            style_file.path().to_str().unwrap(),
+            "-o",
+            output_file.path().to_str().unwrap(),
+        ])
+        .output()
+        .expect("Failed to execute command");
+
+    assert!(output.status.success(), "Process should succeed");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("processed") && stderr.contains("wrote"),
+        "stderr should contain confirmation with 'processed' and 'wrote', got: {}",
+        stderr
+    );
+}
+
+#[test]
+fn test_no_confirmation_message_on_stdout_output() {
+    let markdown = "Les resultats montrent [@item-1].";
+    let md_file = create_temp_file(markdown, ".md");
+    let refs_file = create_temp_file(TEST_REFS, ".json");
+    let style_file = create_temp_file(TEST_STYLE, ".csl");
+
+    let output = Command::new(binary_path())
+        .args([
+            "process",
+            md_file.path().to_str().unwrap(),
+            "--bib",
+            refs_file.path().to_str().unwrap(),
+            "--csl",
+            style_file.path().to_str().unwrap(),
+        ])
+        .output()
+        .expect("Failed to execute command");
+
+    assert!(output.status.success(), "Process should succeed");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        !stderr.contains("processed"),
+        "stderr should NOT contain confirmation when output goes to stdout, got: {}",
+        stderr
+    );
+}
+

@@ -92,30 +92,41 @@ caractéristiques uniques.</p>
 
 ```bash
 # Traiter un document Markdown
-csl-tool process <input.md> --bib <refs.json> --csl <style.csl> [-o output.html]
+csl-tools process <input.md> --bib <refs.json> --csl <style.csl> [-o output.html]
 
-# Générer uniquement une bibliographie
-csl-tool bibliography --bib <refs.json> --csl <style.csl>
+# Lire depuis stdin
+echo '[@key]' | csl-tools process - --bib <refs.json> --csl minimal
 
-# Formater une citation inline (pour scripts/intégrations)
-csl-tool cite --bib <refs.json> --csl <style.csl> --ids "pmid:33024307,pmid:29355051"
+# Lister les styles builtin disponibles
+csl-tools styles
 
-# Valider un fichier CSL-JSON
-csl-tool validate --bib <refs.json>
+# (Phase 2) Générer uniquement une bibliographie
+csl-tools bibliography --bib <refs.json> --csl <style.csl>
 
-# Lister les clés disponibles dans un fichier de références
-csl-tool list --bib <refs.json>
+# (Phase 2) Formater une citation inline (pour scripts/intégrations)
+csl-tools cite --bib <refs.json> --csl <style.csl> --ids "pmid:33024307,pmid:29355051"
+
+# (Phase 2) Valider un fichier CSL-JSON
+csl-tools validate --bib <refs.json>
+
+# (Phase 2) Lister les clés disponibles dans un fichier de références
+csl-tools list --bib <refs.json>
 ```
 
-## Options globales
+## Options de `process`
 
 | Option | Description |
 |--------|-------------|
 | `-o, --output <file>` | Fichier de sortie (défaut: stdout) |
+| `--no-bib` | Ne pas ajouter la bibliographie à la fin |
+| `--bib-header <text>` | Titre de la section bibliographie (défaut: "## References") |
+
+### Options prévues Phase 2
+
+| Option | Description |
+|--------|-------------|
 | `--format <fmt>` | Format de sortie: `html` (défaut), `markdown` |
 | `--locale <code>` | Locale pour les termes: `en-US`, `fr-FR`, etc. |
-| `--no-bib` | Ne pas ajouter la bibliographie à la fin |
-| `--bib-header <text>` | Titre de la section bibliographie (défaut: "References") |
 
 ## Syntaxe des citations
 
