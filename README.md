@@ -93,8 +93,14 @@ cargo build --release
 # Process a Markdown document
 csl-tools process <input.md> --bib <refs.json> --csl <style.csl> [-o output.html]
 
-# Output to Markdown instead of HTML
-csl-tools process input.md --bib refs.json --csl apa.csl --format markdown -o output.md
+# Use a builtin style
+csl-tools process input.md --bib refs.json --csl minimal -o output.html
+
+# Read from stdin
+echo '[@key]' | csl-tools process - --bib refs.json --csl minimal
+
+# List available builtin styles
+csl-tools styles
 ```
 
 ### Options
@@ -105,19 +111,20 @@ csl-tools process input.md --bib refs.json --csl apa.csl --format markdown -o ou
 | `--no-bib` | Don't include bibliography at the end |
 | `--bib-header <text>` | Custom bibliography header (default: `## References`) |
 
-### Claude Code Integration
+### Exit Codes
 
-Install a Claude Code skill for AI-assisted citation formatting:
+| Code | Meaning |
+|------|---------|
+| 0 | Success |
+| 2 | Usage error (invalid args, handled by clap) |
+| 10 | Input file not found / unreadable |
+| 11 | Bibliography file not found / invalid |
+| 12 | CSL style not found / invalid |
+| 13 | Cited reference not found in bibliography |
+| 14 | CSL processing engine error |
+| 15 | Output file write error |
 
-```bash
-# Install the skill in your project
-csl-tools skill-install
-
-# Or specify a custom directory
-csl-tools skill-install --dir /path/to/skills
-```
-
-Once installed, use `/csl-format` in Claude Code to get guided assistance with citation formatting.
+Each error includes a contextual hint on stderr to guide the user.
 
 ## Citation Syntax
 
