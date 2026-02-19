@@ -1,7 +1,8 @@
 //! CLI for csl-tools - Format citations and bibliographies in Markdown documents.
 
+use std::fmt;
 use std::fs;
-use std::io::{self, Write};
+use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
 use std::process;
 
@@ -10,13 +11,23 @@ use clap::{Parser, Subcommand};
 use csl_tools::{
     builtin_style, extract_citation_clusters, extract_citations, format_bibliography,
     format_citations_clusters, generate_output, load_refs, load_style, replace_citations,
+    style::builtin_style_names,
 };
 
-/// CLI for formatting citations and bibliographies in Markdown documents
+// ---------------------------------------------------------------------------
+// CLI definition
+// ---------------------------------------------------------------------------
+
+/// Format citations and bibliographies in Markdown documents
 #[derive(Parser)]
 #[command(name = "csl-tools")]
-#[command(about = "Format citations and bibliographies in Markdown documents")]
 #[command(version)]
+#[command(after_help = "\
+Examples:
+  csl-tools process article.md --bib refs.json --csl style.csl
+  csl-tools process article.md --bib refs.json --csl minimal -o output.html
+  echo '[@key]' | csl-tools process - --bib refs.json --csl minimal
+  csl-tools styles")]
 struct Cli {
     #[command(subcommand)]
     command: Commands,
@@ -25,15 +36,22 @@ struct Cli {
 #[derive(Subcommand)]
 enum Commands {
     /// Process a Markdown file with citations
+    #[command(after_help = "\
+Examples:
+  csl-tools process paper.md --bib refs.json --csl minimal
+  csl-tools process paper.md -b refs.json -c ieee.csl -o paper.html
+  csl-tools process paper.md -b refs.json -c minimal --no-bib
+
+Citation syntax: [@key], [@key](url), [@key, p. 42], [@a; @b; @c]")]
     Process {
-        /// Input Markdown file
+        /// Input Markdown file (use '-' for stdin)
         input: PathBuf,
 
-        /// Bibliography file (CSL-JSON or JSONL)
+        /// Bibliography file (CSL-JSON array or JSONL)
         #[arg(short, long)]
         bib: PathBuf,
 
-        /// CSL style file or builtin style name
+        /// CSL style: path to a .csl file, or builtin name (see 'styles' command)
         #[arg(short, long)]
         csl: String,
 
@@ -50,22 +68,96 @@ enum Commands {
         bib_header: String,
     },
 
-    /// Install the Claude Code skill for citation formatting
-    SkillInstall {
-        /// Installation directory (default: .claude/skills in current directory)
-        #[arg(short, long)]
-        dir: Option<PathBuf>,
-    },
+    /// List available builtin CSL styles
+    Styles,
 }
+
+// ---------------------------------------------------------------------------
+// AppError — semantic exit codes
+// ---------------------------------------------------------------------------
+
+enum AppError {
+    /// Exit 10 — input file not found / unreadable
+    InputFile(String),
+    /// Exit 11 — bibliography file not found / invalid
+    BibFile(String),
+    /// Exit 12 — CSL style not found / invalid
+    Style(String),
+    /// Exit 13 — citation key not found in bibliography
+    ReferenceNotFound(String),
+    /// Exit 14 — CSL processing engine error
+    CslProcessing(String),
+    /// Exit 15 — cannot write output file
+    OutputFile(String),
+}
+
+impl AppError {
+    fn exit_code(&self) -> i32 {
+        match self {
+            AppError::InputFile(_) => 10,
+            AppError::BibFile(_) => 11,
+            AppError::Style(_) => 12,
+            AppError::ReferenceNotFound(_) => 13,
+            AppError::CslProcessing(_) => 14,
+            AppError::OutputFile(_) => 15,
+        }
+    }
+}
+
+impl fmt::Display for AppError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            AppError::InputFile(msg) => {
+                write!(f, "{}\n  hint: verify the file path is correct", msg)
+            }
+            AppError::BibFile(msg) => {
+                write!(
+                    f,
+                    "{}\n  hint: the file must be a JSON array of CSL-JSON objects, or JSONL (one object per line)",
+                    msg
+                )
+            }
+            AppError::Style(msg) => {
+                let names = builtin_style_names().join(", ");
+                write!(
+                    f,
+                    "{}\n  available builtin styles: {}\n  hint: provide a path to a .csl file, or use a builtin style name",
+                    msg, names
+                )
+            }
+            AppError::ReferenceNotFound(msg) => {
+                write!(
+                    f,
+                    "{}\n  hint: check that this citation key exists in your bibliography file",
+                    msg
+                )
+            }
+            AppError::CslProcessing(msg) => {
+                write!(f, "{}", msg)
+            }
+            AppError::OutputFile(msg) => {
+                write!(
+                    f,
+                    "{}\n  hint: check that the output directory exists and is writable",
+                    msg
+                )
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Entry point
+// ---------------------------------------------------------------------------
 
 fn main() {
     if let Err(e) = run() {
         eprintln!("Error: {}", e);
-        process::exit(1);
+        process::exit(e.exit_code());
     }
 }
 
-fn run() -> Result<(), Box<dyn std::error::Error>> {
+fn run() -> Result<(), AppError> {
     let cli = Cli::parse();
 
     match cli.command {
@@ -77,22 +169,19 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             no_bib,
             bib_header,
         } => {
-            process_command(
-                &input,
-                &bib,
-                &csl,
-                output.as_deref(),
-                no_bib,
-                &bib_header,
-            )?;
+            process_command(&input, &bib, &csl, output.as_deref(), no_bib, &bib_header)?;
         }
-        Commands::SkillInstall { dir } => {
-            skill_install_command(dir.as_deref())?;
+        Commands::Styles => {
+            styles_command();
         }
     }
 
     Ok(())
 }
+
+// ---------------------------------------------------------------------------
+// Commands
+// ---------------------------------------------------------------------------
 
 /// Process a Markdown file with citations.
 fn process_command(
@@ -102,50 +191,70 @@ fn process_command(
     output: Option<&Path>,
     no_bib: bool,
     bib_header: &str,
-) -> Result<(), Box<dyn std::error::Error>> {
-    // 1. Read the Markdown file
-    let markdown = fs::read_to_string(input)
-        .map_err(|e| format!("Failed to read input file '{}': {}", input.display(), e))?;
+) -> Result<(), AppError> {
+    // 1. Read the Markdown file (support '-' for stdin)
+    let markdown = if input == Path::new("-") {
+        let mut buf = String::new();
+        io::stdin()
+            .read_to_string(&mut buf)
+            .map_err(|e| AppError::InputFile(format!("failed to read from stdin: {}", e)))?;
+        buf
+    } else {
+        fs::read_to_string(input).map_err(|e| {
+            AppError::InputFile(format!("'{}': {}", input.display(), e))
+        })?
+    };
 
-    // 2. Load references with load_refs()
-    let refs_json = load_refs(bib).map_err(|e| {
-        format!(
-            "Failed to load bibliography file '{}': {}",
-            bib.display(),
-            e
-        )
-    })?;
+    // 2. Load references
+    let refs_json = load_refs(bib)
+        .map_err(|e| AppError::BibFile(format!("'{}': {}", bib.display(), e)))?;
 
-    // 3. Load style with load_style() or builtin_style()
+    // 3. Load style (builtin or file)
     let style_csl = if let Some(builtin) = builtin_style(csl) {
         builtin.to_string()
     } else {
-        // Try to load as a file path
         let style_path = PathBuf::from(csl);
-        load_style(&style_path).map_err(|e| format!("Failed to load CSL style '{}': {}", csl, e))?
+        load_style(&style_path).map_err(|e| {
+            if style_path.exists() {
+                AppError::Style(format!("invalid CSL style '{}': {}", csl, e))
+            } else {
+                AppError::Style(format!(
+                    "'{}' is not a builtin style name and no file with this path exists",
+                    csl
+                ))
+            }
+        })?
     };
 
-    // 4. Extract citation clusters with extract_citation_clusters()
-    // This detects adjacent citations and groups them together
+    // 4. Extract citation clusters (adjacent citations grouped)
     let clusters = extract_citation_clusters(&markdown);
 
-    // 5. Format citation clusters with format_citations_clusters()
-    // This sends grouped citations to csl_proc for proper formatting (e.g., "(1-3)" instead of "(1) (2) (3)")
-    let processed = format_citations_clusters(&clusters, &refs_json, &style_csl)
-        .map_err(|e| format!("Failed to format citations: {}", e))?;
+    // 5. Format citation clusters via csl_proc
+    let processed = format_citations_clusters(&clusters, &refs_json, &style_csl).map_err(|e| {
+        let msg = e.to_string();
+        if msg.contains("Reference not found") {
+            AppError::ReferenceNotFound(msg)
+        } else {
+            AppError::CslProcessing(msg)
+        }
+    })?;
 
-    // 6. Replace citations with replace_citations()
-    // Each cluster is replaced as a single unit
+    // 6. Replace citations in text
     let content = replace_citations(&markdown, &processed);
 
-    // 7. If --no-bib is not present, format the bibliography with format_bibliography()
-    // Note: format_bibliography still uses individual citations for reference collection
+    // 7. Format bibliography
     let citations = extract_citations(&markdown);
     let bibliography = if no_bib {
         None
     } else {
-        let bib_html = format_bibliography(&citations, &refs_json, &style_csl)
-            .map_err(|e| format!("Failed to format bibliography: {}", e))?;
+        let bib_html = format_bibliography(&citations, &refs_json, &style_csl).map_err(|e| {
+            let msg = e.to_string();
+            if msg.contains("Reference not found") {
+                AppError::ReferenceNotFound(msg)
+            } else {
+                AppError::CslProcessing(msg)
+            }
+        })?;
         if bib_html.is_empty() {
             None
         } else {
@@ -153,66 +262,33 @@ fn process_command(
         }
     };
 
-    // 8. Generate the output with generate_output()
+    // 8. Generate output
     let result = generate_output(&content, bibliography.as_deref(), bib_header);
 
-    // 9. Write to output file or stdout
+    // 9. Write to file or stdout
     if let Some(output_path) = output {
         fs::write(output_path, &result).map_err(|e| {
-            format!(
-                "Failed to write output file '{}': {}",
-                output_path.display(),
-                e
-            )
+            AppError::OutputFile(format!("'{}': {}", output_path.display(), e))
         })?;
+        eprintln!(
+            "processed {} citation(s), wrote {}",
+            processed.len(),
+            output_path.display()
+        );
     } else {
         let stdout = io::stdout();
         let mut handle = stdout.lock();
-        writeln!(handle, "{}", result)?;
+        write!(handle, "{}", result).map_err(|e| {
+            AppError::OutputFile(format!("stdout: {}", e))
+        })?;
     }
 
     Ok(())
 }
 
-/// The embedded Claude Code skill content
-const SKILL_CONTENT: &str = include_str!("skill.md");
-
-/// Install the Claude Code skill for citation formatting.
-fn skill_install_command(dir: Option<&Path>) -> Result<(), Box<dyn std::error::Error>> {
-    // Determine installation directory
-    let base_dir = if let Some(d) = dir {
-        d.to_path_buf()
-    } else {
-        PathBuf::from(".claude/skills")
-    };
-
-    let skill_dir = base_dir.join("csl-format");
-
-    // Create directory if it doesn't exist
-    fs::create_dir_all(&skill_dir).map_err(|e| {
-        format!(
-            "Failed to create skill directory '{}': {}",
-            skill_dir.display(),
-            e
-        )
-    })?;
-
-    // Write the skill file
-    let skill_path = skill_dir.join("SKILL.md");
-    fs::write(&skill_path, SKILL_CONTENT).map_err(|e| {
-        format!(
-            "Failed to write skill file '{}': {}",
-            skill_path.display(),
-            e
-        )
-    })?;
-
-    println!("Claude Code skill installed successfully!");
-    println!("  Location: {}", skill_path.display());
-    println!();
-    println!("The skill is now available in Claude Code when working in this directory.");
-    println!("Use it by asking Claude to format your citations, or invoke it with:");
-    println!("  /csl-format");
-
-    Ok(())
+/// List available builtin CSL styles.
+fn styles_command() {
+    for name in builtin_style_names() {
+        println!("{}", name);
+    }
 }

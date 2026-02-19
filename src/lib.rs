@@ -20,4 +20,4 @@ pub use processor::{
     format_bibliography, format_citations, format_citations_clusters, ProcessedCitation,
 };
 pub use refs::load_refs;
-pub use style::{builtin_style, load_style};
+pub use style::{builtin_style, builtin_style_names, load_style};

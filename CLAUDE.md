@@ -17,10 +17,13 @@ Voir `overview.md` pour la spécification complète.
 ```
 csl-tools/
 ├── src/
-│   ├── main.rs           # CLI (clap)
+│   ├── main.rs           # CLI (clap) + AppError + codes de sortie
 │   ├── markdown.rs       # Parser citations Markdown
-│   ├── processor.rs      # Orchestration
-│   └── output.rs         # Génération HTML/Markdown
+│   ├── processor.rs      # Orchestration csl_proc
+│   ├── refs.rs           # Chargement CSL-JSON / JSONL
+│   ├── style.rs          # Chargement styles CSL + builtin
+│   ├── output.rs         # Génération HTML/Markdown
+│   └── lib.rs            # API publique
 ├── Cargo.toml
 ├── CLAUDE.md             # Ce fichier
 └── overview.md           # Spécification détaillée
@@ -41,9 +44,28 @@ cargo build
 # Run
 cargo run -- process article.md --bib refs.json --csl style.csl -o output.html
 
+# Stdin
+echo '[@key]' | cargo run -- process - --bib refs.json --csl minimal
+
+# Lister les styles builtin
+cargo run -- styles
+
 # Tests
 cargo test
 ```
+
+## Codes de sortie
+
+| Code | Signification |
+|------|---------------|
+| 0    | Succès |
+| 2    | Erreur d'usage (args invalides, géré par clap) |
+| 10   | Fichier d'entrée introuvable / illisible |
+| 11   | Fichier bibliographie introuvable / invalide |
+| 12   | Style CSL introuvable / invalide |
+| 13   | Référence citée non trouvée dans la bibliographie |
+| 14   | Erreur du moteur CSL |
+| 15   | Erreur d'écriture du fichier de sortie |
 
 ## Workflow de développement
 
@@ -63,6 +85,12 @@ cargo test
 - [x] Sortie HTML et Markdown
 - [x] Groupement automatique des citations adjacentes
 - [x] Support syntaxe Pandoc `[@a; @b; @c]`
+- [x] Support stdin via `-`
+- [x] Sous-commande `styles` (progressive disclosure)
+- [x] Codes de sortie sémantiques (10-15)
+- [x] Messages d'erreur avec hints contextuels
+- [x] Exemples dans `--help`
+- [x] Confirmation sur stderr avec `-o`
 
 ## Syntaxe des citations
 
@@ -87,5 +115,5 @@ Les citations adjacentes (separees uniquement par des espaces) sont automatiquem
 
 ## Notes
 
-- `csl_proc` est en dépendance locale (`path = "../csl_proc"`)
-- Passer à `git = "https://github.com/lescientifik/csl_proc.git"` avant publication
+- `csl_proc` est en dépendance git (`git = "https://github.com/lescientifik/csl_proc.git"`)
+- `--format` et `--locale` sont prévus pour Phase 2 (non implémentés)

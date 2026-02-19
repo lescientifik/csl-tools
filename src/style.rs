@@ -50,6 +50,11 @@ pub fn builtin_style(name: &str) -> Option<&'static str> {
     }
 }
 
+/// Returns the list of available builtin style names.
+pub fn builtin_style_names() -> &'static [&'static str] {
+    &["minimal"]
+}
+
 /// Minimal CSL style for testing purposes.
 const MINIMAL_STYLE: &str = r#"<?xml version="1.0" encoding="utf-8"?>
 <style xmlns="http://purl.org/net/xbiblio/csl" class="in-text" version="1.0">
