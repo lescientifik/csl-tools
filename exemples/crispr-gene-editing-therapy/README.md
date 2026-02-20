@@ -7,7 +7,7 @@ Démonstration de la pipeline complète `pm-tools` → `csl-tools`.
 | Fichier | Description |
 |---------|-------------|
 | `article.md` | Article original avec citations `[@pmid:...]` |
-| `refs.jsonl` | Références CSL-JSON (via `pm-cite`) |
+| `refs.jsonl` | Références CSL-JSON (via `pm cite`) |
 | `apa.csl` | Style de citation APA 7th edition |
 | `output.md` | Article final avec citations formatées et bibliographie |
 
@@ -15,10 +15,10 @@ Démonstration de la pipeline complète `pm-tools` → `csl-tools`.
 
 ```bash
 # 1. Recherche PubMed
-pm-search --max 5 "CRISPR gene editing therapy 2024"
+pm search --max 5 "CRISPR gene editing therapy 2024"
 
 # 2. Récupération des citations
-echo -e "41524770\n41524478\n41481737\n41476860\n41465342" | pm-cite > refs.jsonl
+pm cite 41524770 41524478 41481737 41476860 41465342 > refs.jsonl
 
 # 3. Traitement avec csl-tools
 csl-tools process article.md --bib refs.jsonl --csl apa.csl -o output.md

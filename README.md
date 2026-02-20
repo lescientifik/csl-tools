@@ -163,50 +163,100 @@ The DOI link is clickable in your editor but removed in the final output.
 
 ## Integration with pm-tools
 
-[pm-tools](https://github.com/lescientifik/pm-tools) is a companion CLI suite for searching and fetching PubMed articles. Together, they provide a complete workflow for scientific writing.
+[pm-tools](https://github.com/lescientifik/pm-tools) is a companion CLI for searching, fetching, and analyzing PubMed articles. Together, they provide a complete workflow from literature search to formatted manuscript.
 
-### Search, cite, and format in one pipeline
+### Install pm-tools
 
 ```bash
-# Search PubMed and generate bibliography
-pm-search "CRISPR gene therapy" | pm-fetch | pm-cite > refs.jsonl
+uv tool install git+https://github.com/lescientifik/pm-tools.git
+```
 
-# Format your article
+Requires Python >= 3.12 and [uv](https://docs.astral.sh/uv/). All `pm` commands support `--help`.
+
+### Pipeline-first: cache and pipes
+
+`pm` caches API responses locally (in `.pm/cache/`), so you can re-run the same pipeline without re-querying PubMed. This means you can iterate freely with pipes — no need to save intermediate files:
+
+```bash
+# Search, filter, change your mind — the cache avoids redundant API calls
+pm search "CRISPR gene therapy" | pm fetch | pm parse | pm filter --year 2024-
+pm search "CRISPR gene therapy" | pm fetch | pm parse | pm filter --has-abstract --journal "Nature"
+
+# Generate bibliography directly
+pm search "CRISPR gene therapy" | pm fetch | pm cite > refs.jsonl
 csl-tools process article.md --bib refs.jsonl --csl nature.csl -o article.html
 ```
+
+`pm quick` is a shortcut for `pm search | pm fetch | pm parse`:
+
+```bash
+pm quick "covid vaccine" --max 50 | pm filter --year 2024-
+```
+
+### When to save JSONL files
+
+The cache is local and gitignored — it speeds up your work but isn't shareable. Save to JSONL when you need **reproducibility**, **versioning**, or **collaboration**:
+
+```bash
+# Save a curated selection for the project (committable, shareable)
+pm search "immunotherapy melanoma" | pm fetch | pm parse > articles.jsonl
+pm filter --year 2023-2025 --journal "Nature" < articles.jsonl > filtered.jsonl
+
+# Generate citations from the filtered set
+jq -r '.pmid' filtered.jsonl | pm cite > refs.jsonl
+
+# Anyone with the repo can rebuild the manuscript without PubMed access
+csl-tools process manuscript.md --bib refs.jsonl --csl cell.csl -o manuscript.html
+```
+
+| | Cache (`.pm/cache/`) | JSONL files |
+|---|---|---|
+| Purpose | Avoid redundant API calls | Reproducibility and sharing |
+| Git-tracked | No (gitignored) | Yes (committable) |
+| Shareable | No (local only) | Yes |
+| Offline rebuild | No | Yes — `csl-tools` only needs `refs.jsonl` |
+
+**Rule of thumb:** pipe freely during exploration, save to JSONL what matters for the final manuscript.
 
 ### Build a bibliography from PMIDs
 
 ```bash
 # Generate CSL-JSON for specific articles
-pm-cite 33024307 29355051 38461394 > refs.jsonl
+pm cite 33024307 29355051 38461394 > refs.jsonl
 
 # Use in your document with [@pmid:33024307] syntax
 csl-tools process article.md --bib refs.jsonl --csl apa.csl -o output.html
 ```
 
-### Interactive article selection with fzf
+### Download Open Access PDFs
 
 ```bash
-# Search, preview, select articles interactively, then generate citations
-pm-search "PET imaging biomarkers" | pm-fetch | pm-parse | \
-  pm-show --fzf | pm-cite > refs.jsonl
+# Preview what's available
+pm search "CRISPR" | pm fetch | pm parse | pm download --dry-run
+
+# Download to a directory (uses PMC, then Unpaywall as fallback)
+pm search "CRISPR" | pm fetch | pm parse | pm download --output-dir ./pdfs/
 ```
 
-### Complete research workflow
+### Track search evolution with pm diff
 
 ```bash
-# 1. Search and save parsed results for offline use
-pm-search "immunotherapy melanoma" | pm-fetch | pm-parse > articles.jsonl
+# Compare two search snapshots to find new articles
+pm quick "CRISPR cancer" > baseline_v1.jsonl
+# ... later ...
+pm quick "CRISPR cancer" > baseline_v2.jsonl
+pm diff baseline_v1.jsonl baseline_v2.jsonl | jq -r 'select(.status=="added") | .pmid'
+```
 
-# 2. Filter by year and journal
-pm-filter --year 2023-2025 --journal "Nature" < articles.jsonl > filtered.jsonl
+### Audit trail
 
-# 3. Generate citations for selected articles
-jq -r '.pmid' filtered.jsonl | pm-cite > refs.jsonl
+```bash
+# Initialize audit tracking in your project
+pm init
 
-# 4. Format your manuscript
-csl-tools process manuscript.md --bib refs.jsonl --csl cell.csl -o manuscript.html
+# View history of all pm operations
+pm audit
+pm audit --searches
 ```
 
 ## PubMed Workflow (without pm-tools)
