@@ -163,50 +163,88 @@ The DOI link is clickable in your editor but removed in the final output.
 
 ## Integration with pm-tools
 
-[pm-tools](https://github.com/lescientifik/pm-tools) is a companion CLI suite for searching and fetching PubMed articles. Together, they provide a complete workflow for scientific writing.
+[pm-tools](https://github.com/lescientifik/pm-tools) is a companion CLI for searching, fetching, and analyzing PubMed articles. Together, they provide a complete workflow from literature search to formatted manuscript.
+
+### Install pm-tools
+
+```bash
+uv tool install git+https://github.com/lescientifik/pm-tools.git
+```
+
+Requires Python >= 3.12 and [uv](https://docs.astral.sh/uv/). All `pm` commands support `--help`.
 
 ### Search, cite, and format in one pipeline
 
 ```bash
 # Search PubMed and generate bibliography
-pm-search "CRISPR gene therapy" | pm-fetch | pm-cite > refs.jsonl
+pm search "CRISPR gene therapy" | pm fetch | pm cite > refs.jsonl
 
 # Format your article
 csl-tools process article.md --bib refs.jsonl --csl nature.csl -o article.html
+```
+
+### Quick search shortcut
+
+```bash
+# pm quick runs the full pipeline (search | fetch | parse) in one command
+pm quick "covid vaccine" --max 50 > articles.jsonl
 ```
 
 ### Build a bibliography from PMIDs
 
 ```bash
 # Generate CSL-JSON for specific articles
-pm-cite 33024307 29355051 38461394 > refs.jsonl
+pm cite 33024307 29355051 38461394 > refs.jsonl
 
 # Use in your document with [@pmid:33024307] syntax
 csl-tools process article.md --bib refs.jsonl --csl apa.csl -o output.html
-```
-
-### Interactive article selection with fzf
-
-```bash
-# Search, preview, select articles interactively, then generate citations
-pm-search "PET imaging biomarkers" | pm-fetch | pm-parse | \
-  pm-show --fzf | pm-cite > refs.jsonl
 ```
 
 ### Complete research workflow
 
 ```bash
 # 1. Search and save parsed results for offline use
-pm-search "immunotherapy melanoma" | pm-fetch | pm-parse > articles.jsonl
+pm search "immunotherapy melanoma" | pm fetch | pm parse > articles.jsonl
 
 # 2. Filter by year and journal
-pm-filter --year 2023-2025 --journal "Nature" < articles.jsonl > filtered.jsonl
+pm filter --year 2023-2025 --journal "Nature" < articles.jsonl > filtered.jsonl
 
 # 3. Generate citations for selected articles
-jq -r '.pmid' filtered.jsonl | pm-cite > refs.jsonl
+jq -r '.pmid' filtered.jsonl | pm cite > refs.jsonl
 
 # 4. Format your manuscript
 csl-tools process manuscript.md --bib refs.jsonl --csl cell.csl -o manuscript.html
+```
+
+### Download Open Access PDFs
+
+```bash
+# Preview what's available
+pm search "CRISPR" | pm fetch | pm parse | pm download --dry-run
+
+# Download to a directory (uses PMC, then Unpaywall as fallback)
+pm search "CRISPR" | pm fetch | pm parse | pm download --output-dir ./pdfs/
+```
+
+### Track search evolution with pm diff
+
+```bash
+# Compare two search snapshots to find new articles
+pm quick "CRISPR cancer" > baseline_v1.jsonl
+# ... later ...
+pm quick "CRISPR cancer" > baseline_v2.jsonl
+pm diff baseline_v1.jsonl baseline_v2.jsonl | jq -r 'select(.status=="added") | .pmid'
+```
+
+### Audit trail
+
+```bash
+# Initialize audit tracking in your project
+pm init
+
+# View history of all pm operations
+pm audit
+pm audit --searches
 ```
 
 ## PubMed Workflow (without pm-tools)
