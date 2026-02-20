@@ -173,22 +173,50 @@ uv tool install git+https://github.com/lescientifik/pm-tools.git
 
 Requires Python >= 3.12 and [uv](https://docs.astral.sh/uv/). All `pm` commands support `--help`.
 
-### Search, cite, and format in one pipeline
+### Pipeline-first: cache and pipes
+
+`pm` caches API responses locally (in `.pm/cache/`), so you can re-run the same pipeline without re-querying PubMed. This means you can iterate freely with pipes — no need to save intermediate files:
 
 ```bash
-# Search PubMed and generate bibliography
-pm search "CRISPR gene therapy" | pm fetch | pm cite > refs.jsonl
+# Search, filter, change your mind — the cache avoids redundant API calls
+pm search "CRISPR gene therapy" | pm fetch | pm parse | pm filter --year 2024-
+pm search "CRISPR gene therapy" | pm fetch | pm parse | pm filter --has-abstract --journal "Nature"
 
-# Format your article
+# Generate bibliography directly
+pm search "CRISPR gene therapy" | pm fetch | pm cite > refs.jsonl
 csl-tools process article.md --bib refs.jsonl --csl nature.csl -o article.html
 ```
 
-### Quick search shortcut
+`pm quick` is a shortcut for `pm search | pm fetch | pm parse`:
 
 ```bash
-# pm quick runs the full pipeline (search | fetch | parse) in one command
-pm quick "covid vaccine" --max 50 > articles.jsonl
+pm quick "covid vaccine" --max 50 | pm filter --year 2024-
 ```
+
+### When to save JSONL files
+
+The cache is local and gitignored — it speeds up your work but isn't shareable. Save to JSONL when you need **reproducibility**, **versioning**, or **collaboration**:
+
+```bash
+# Save a curated selection for the project (committable, shareable)
+pm search "immunotherapy melanoma" | pm fetch | pm parse > articles.jsonl
+pm filter --year 2023-2025 --journal "Nature" < articles.jsonl > filtered.jsonl
+
+# Generate citations from the filtered set
+jq -r '.pmid' filtered.jsonl | pm cite > refs.jsonl
+
+# Anyone with the repo can rebuild the manuscript without PubMed access
+csl-tools process manuscript.md --bib refs.jsonl --csl cell.csl -o manuscript.html
+```
+
+| | Cache (`.pm/cache/`) | JSONL files |
+|---|---|---|
+| Purpose | Avoid redundant API calls | Reproducibility and sharing |
+| Git-tracked | No (gitignored) | Yes (committable) |
+| Shareable | No (local only) | Yes |
+| Offline rebuild | No | Yes — `csl-tools` only needs `refs.jsonl` |
+
+**Rule of thumb:** pipe freely during exploration, save to JSONL what matters for the final manuscript.
 
 ### Build a bibliography from PMIDs
 
@@ -198,22 +226,6 @@ pm cite 33024307 29355051 38461394 > refs.jsonl
 
 # Use in your document with [@pmid:33024307] syntax
 csl-tools process article.md --bib refs.jsonl --csl apa.csl -o output.html
-```
-
-### Complete research workflow
-
-```bash
-# 1. Search and save parsed results for offline use
-pm search "immunotherapy melanoma" | pm fetch | pm parse > articles.jsonl
-
-# 2. Filter by year and journal
-pm filter --year 2023-2025 --journal "Nature" < articles.jsonl > filtered.jsonl
-
-# 3. Generate citations for selected articles
-jq -r '.pmid' filtered.jsonl | pm cite > refs.jsonl
-
-# 4. Format your manuscript
-csl-tools process manuscript.md --bib refs.jsonl --csl cell.csl -o manuscript.html
 ```
 
 ### Download Open Access PDFs
