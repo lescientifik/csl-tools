@@ -771,6 +771,66 @@ fn test_styles_subcommand() {
 }
 
 // ============================================
+// Tests for Vancouver builtin style
+// ============================================
+
+#[test]
+fn test_styles_subcommand_lists_vancouver() {
+    // Given: The styles subcommand
+    let output = Command::new(binary_path())
+        .arg("styles")
+        .output()
+        .expect("Failed to execute command");
+
+    // Then: Vancouver is listed among builtin styles
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        output.status.success(),
+        "styles subcommand should succeed. stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(
+        stdout.contains("vancouver"),
+        "styles output should list 'vancouver' builtin style, got: {}",
+        stdout
+    );
+}
+
+#[test]
+fn test_cli_process_builtin_vancouver() {
+    // Given: Markdown with a citation, using builtin vancouver style
+    let markdown = "Les résultats montrent [@item-1].";
+    let md_file = create_temp_file(markdown, ".md");
+    let refs_file = create_temp_file(TEST_REFS, ".json");
+
+    // When: We run with builtin style name "vancouver"
+    let output = Command::new(binary_path())
+        .args([
+            "process",
+            md_file.path().to_str().unwrap(),
+            "--bib",
+            refs_file.path().to_str().unwrap(),
+            "--csl",
+            "vancouver",
+        ])
+        .output()
+        .expect("Failed to execute command");
+
+    // Then: The output contains a numeric citation (1)
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        output.status.success(),
+        "Process with vancouver style should succeed. stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(
+        stdout.contains("(1)"),
+        "Vancouver style should produce numeric citation (1), got: {}",
+        stdout
+    );
+}
+
+// ============================================
 // Tests for error hints
 // ============================================
 

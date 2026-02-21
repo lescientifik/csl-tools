@@ -218,4 +218,29 @@ mod tests {
             );
         }
     }
+
+    #[test]
+    fn test_builtin_style_vancouver() {
+        // Given: The "vancouver" builtin style name
+        let name = "vancouver";
+
+        // When: We request the builtin style
+        let result = builtin_style(name);
+
+        // Then: We get a valid CSL style with Vancouver characteristics
+        assert!(result.is_some(), "vancouver style should be available");
+        let content = result.unwrap();
+        assert!(
+            content.contains("citation-number"),
+            "Vancouver style should use citation-number"
+        );
+        assert!(
+            content.contains("initialize-with"),
+            "Vancouver style should initialize author given names"
+        );
+        assert!(
+            content.contains("name-as-sort-order"),
+            "Vancouver style should use name-as-sort-order"
+        );
+    }
 }
