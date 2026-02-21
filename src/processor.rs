@@ -262,7 +262,15 @@ pub fn format_bibliography(
         .filter_map(|r| r.get("id").and_then(|id| id.as_str()).map(|id| (id, r)))
         .collect();
 
-    // Order refs by first appearance in text (citations is already in document order)
+    // Order refs by first appearance in text (citations is already in document order).
+    // For styles WITHOUT <sort> in <bibliography>, csl_proc assigns citation-number = i+1
+    // based on array position, so this ordering determines the final bibliography order.
+    // For styles WITH <sort> in <bibliography>, csl_proc re-sorts entries anyway — our
+    // ordering is a sensible default that gets overridden by the style.
+    //
+    // Note: missing refs are silently skipped here. In practice format_citations_clusters()
+    // runs first in main.rs and returns ReferenceNotFound, so this path is only reachable
+    // if format_bibliography() is called directly via the public API.
     let mut seen = HashSet::new();
     let mut cited_refs: Vec<&Value> = Vec::new();
     for citation in citations {
@@ -607,6 +615,8 @@ mod tests {
 
     // Numeric CSL style WITHOUT <sort> in <bibliography> — bibliography order
     // depends entirely on the order of the refs array passed to csl_proc.
+    // NOTE: Same CSL content as `tests/common::NUMERIC_STYLE` (duplicated here
+    // because unit tests cannot import from integration test crates).
     const NUMERIC_NOSORT_STYLE: &str = r#"<style xmlns="http://purl.org/net/xbiblio/csl" class="in-text" version="1.0">
   <info>
     <id>numeric-nosort</id>

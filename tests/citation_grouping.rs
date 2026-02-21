@@ -7,10 +7,10 @@
 //! - Citations separated only by whitespace (or directly adjacent) are grouped
 //! - Citations separated by punctuation or text are NOT grouped
 
-use csl_tools::{
-    extract_citation_clusters, format_bibliography, format_citations_clusters, Citation,
-    CitationCluster, CitationItem,
-};
+mod common;
+
+use csl_tools::{extract_citation_clusters, format_citations_clusters, CitationCluster, CitationItem};
+use common::{build_refs, NUMERIC_STYLE};
 
 // =============================================================================
 // Tests for parsing adjacent citations
@@ -270,31 +270,6 @@ fn test_grouped_with_locators() {
 // Tests for CSL formatting with clusters (Phase 5)
 // =============================================================================
 
-// Numeric style with collapse="citation-number" that collapses consecutive numbers
-const NUMERIC_STYLE: &str = r#"<?xml version="1.0" encoding="utf-8"?>
-<style xmlns="http://purl.org/net/xbiblio/csl" class="in-text" version="1.0">
-  <info>
-    <id>numeric-collapse</id>
-    <title>Numeric with Collapse</title>
-    <updated>2024-01-01T00:00:00+00:00</updated>
-  </info>
-  <citation collapse="citation-number">
-    <sort>
-      <key variable="citation-number"/>
-    </sort>
-    <layout prefix="(" suffix=")" delimiter=",">
-      <text variable="citation-number"/>
-    </layout>
-  </citation>
-  <bibliography>
-    <layout suffix=".">
-      <text variable="citation-number" suffix=". "/>
-      <names variable="author"><name/></names>
-      <text prefix=". " variable="title"/>
-    </layout>
-  </bibliography>
-</style>"#;
-
 // Author-date style for grouped citations
 const AUTHOR_DATE_STYLE: &str = r#"<?xml version="1.0" encoding="utf-8"?>
 <style xmlns="http://purl.org/net/xbiblio/csl" class="in-text" version="1.0">
@@ -327,22 +302,6 @@ const AUTHOR_DATE_STYLE: &str = r#"<?xml version="1.0" encoding="utf-8"?>
     </layout>
   </bibliography>
 </style>"#;
-
-// Helper function to build test references
-fn build_refs(ids: &[&str]) -> String {
-    let refs: Vec<String> = ids
-        .iter()
-        .map(|id| {
-            format!(
-                r#"{{"id": "{}", "type": "article-journal", "author": [{{"family": "Author{}", "given": "A."}}], "title": "Title {}", "issued": {{"date-parts": [[2020]]}}}}"#,
-                id,
-                id.chars().last().unwrap_or('X'),
-                id
-            )
-        })
-        .collect();
-    format!("[{}]", refs.join(", "))
-}
 
 /// Test 8: Numeric style with consecutive numbers produces range (1-3)
 #[test]
@@ -561,57 +520,6 @@ fn test_format_author_date_grouped() {
         formatted.contains(";"),
         "Expected semicolon delimiter between grouped citations, got: {}",
         formatted
-    );
-}
-
-// =============================================================================
-// Tests for bibliography ordering (Issue #4)
-// =============================================================================
-
-/// Test: Bibliography order follows citation appearance order, not JSON order
-#[test]
-fn test_bibliography_order_matches_citation_appearance() {
-    // Given: 3 refs in JSON order [C, A, B], but cited in order [A, B, C]
-    let refs = r#"[
-        {"id": "charlie", "type": "article-journal", "author": [{"family": "Charlie", "given": "C."}], "title": "Charlie Title", "issued": {"date-parts": [[2022]]}},
-        {"id": "alpha", "type": "article-journal", "author": [{"family": "Alpha", "given": "A."}], "title": "Alpha Title", "issued": {"date-parts": [[2020]]}},
-        {"id": "bravo", "type": "article-journal", "author": [{"family": "Bravo", "given": "B."}], "title": "Bravo Title", "issued": {"date-parts": [[2021]]}}
-    ]"#;
-    let citations = vec![
-        Citation {
-            id: "alpha".to_string(),
-            locator: None,
-            label: None,
-            url: None,
-            span: (0, 10),
-        },
-        Citation {
-            id: "bravo".to_string(),
-            locator: None,
-            label: None,
-            url: None,
-            span: (20, 30),
-        },
-        Citation {
-            id: "charlie".to_string(),
-            locator: None,
-            label: None,
-            url: None,
-            span: (40, 50),
-        },
-    ];
-
-    // When: We format the bibliography with a numeric style (no sort in bibliography)
-    let result = format_bibliography(&citations, refs, NUMERIC_STYLE).unwrap();
-
-    // Then: Order in bibliography should be Alpha < Bravo < Charlie (citation appearance order)
-    let alpha_pos = result.find("Alpha").expect("Alpha should appear");
-    let bravo_pos = result.find("Bravo").expect("Bravo should appear");
-    let charlie_pos = result.find("Charlie").expect("Charlie should appear");
-    assert!(
-        alpha_pos < bravo_pos && bravo_pos < charlie_pos,
-        "Bibliography should follow citation order: Alpha(1) < Bravo(2) < Charlie(3). Got:\n{}",
-        result
     );
 }
 

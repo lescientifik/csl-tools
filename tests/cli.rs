@@ -2,6 +2,8 @@
 //!
 //! Tests the command-line interface by running the binary as a subprocess.
 
+mod common;
+
 use std::fs;
 use std::io::Write;
 use std::path::PathBuf;
@@ -423,31 +425,6 @@ fn test_cli_process_jsonl_refs() {
 // Tests for citation grouping (Phase 6)
 // ============================================
 
-// Numeric style with collapse for testing grouped citations
-const NUMERIC_COLLAPSE_STYLE: &str = r#"<?xml version="1.0" encoding="utf-8"?>
-<style xmlns="http://purl.org/net/xbiblio/csl" class="in-text" version="1.0">
-  <info>
-    <title>Numeric Collapse</title>
-    <id>numeric-collapse</id>
-    <updated>2024-01-01T00:00:00+00:00</updated>
-  </info>
-  <citation collapse="citation-number">
-    <sort>
-      <key variable="citation-number"/>
-    </sort>
-    <layout prefix="(" suffix=")" delimiter=",">
-      <text variable="citation-number"/>
-    </layout>
-  </citation>
-  <bibliography>
-    <layout suffix=".">
-      <text variable="citation-number" suffix=". "/>
-      <names variable="author"><name/></names>
-      <text prefix=". " variable="title"/>
-    </layout>
-  </bibliography>
-</style>"#;
-
 const GROUPED_TEST_REFS: &str = r#"[
     {"id": "ref-a", "type": "article-journal", "author": [{"family": "AuthorA", "given": "A."}], "title": "Title A", "issued": {"date-parts": [[2020]]}},
     {"id": "ref-b", "type": "article-journal", "author": [{"family": "AuthorB", "given": "B."}], "title": "Title B", "issued": {"date-parts": [[2021]]}},
@@ -460,7 +437,7 @@ fn test_cli_process_grouped_citations() {
     let markdown = "Studies [@ref-a] [@ref-b] [@ref-c] show that...";
     let md_file = create_temp_file(markdown, ".md");
     let refs_file = create_temp_file(GROUPED_TEST_REFS, ".json");
-    let style_file = create_temp_file(NUMERIC_COLLAPSE_STYLE, ".csl");
+    let style_file = create_temp_file(common::NUMERIC_STYLE, ".csl");
 
     // When: We run the process command
     let output = Command::new(binary_path())
@@ -510,7 +487,7 @@ fn test_cli_process_mixed_grouped_and_separate() {
     let markdown = "First group [@ref-a] [@ref-b] and then separate [@ref-c].";
     let md_file = create_temp_file(markdown, ".md");
     let refs_file = create_temp_file(GROUPED_TEST_REFS, ".json");
-    let style_file = create_temp_file(NUMERIC_COLLAPSE_STYLE, ".csl");
+    let style_file = create_temp_file(common::NUMERIC_STYLE, ".csl");
 
     // When: We run the process command
     let output = Command::new(binary_path())
