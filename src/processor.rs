@@ -602,6 +602,116 @@ mod tests {
         );
     }
 
+    // Numeric CSL style WITHOUT <sort> in <bibliography> — bibliography order
+    // depends entirely on the order of the refs array passed to csl_proc.
+    const NUMERIC_NOSORT_STYLE: &str = r#"<style xmlns="http://purl.org/net/xbiblio/csl" class="in-text" version="1.0">
+  <info>
+    <id>numeric-nosort</id>
+    <title>Numeric No Sort</title>
+    <updated>2024-01-01T00:00:00+00:00</updated>
+  </info>
+  <citation collapse="citation-number">
+    <sort><key variable="citation-number"/></sort>
+    <layout prefix="(" suffix=")" delimiter=",">
+      <text variable="citation-number"/>
+    </layout>
+  </citation>
+  <bibliography>
+    <layout suffix=".">
+      <text variable="citation-number" suffix=". "/>
+      <names variable="author"><name/></names>
+      <text prefix=". " variable="title"/>
+    </layout>
+  </bibliography>
+</style>"#;
+
+    #[test]
+    fn test_format_bibliography_order_matches_citation_order() {
+        // Given: Refs JSON in order [Bravo, Alpha], citations reference [Alpha, Bravo]
+        let refs = r#"[
+            {"id": "bravo", "type": "article-journal", "author": [{"family": "Bravo", "given": "B."}], "title": "Bravo Title", "issued": {"date-parts": [[2020]]}},
+            {"id": "alpha", "type": "article-journal", "author": [{"family": "Alpha", "given": "A."}], "title": "Alpha Title", "issued": {"date-parts": [[2021]]}}
+        ]"#;
+        let citations = vec![
+            Citation {
+                id: "alpha".to_string(),
+                locator: None,
+                label: None,
+                url: None,
+                span: (0, 10),
+            },
+            Citation {
+                id: "bravo".to_string(),
+                locator: None,
+                label: None,
+                url: None,
+                span: (20, 30),
+            },
+        ];
+
+        // When: We format the bibliography
+        let result = format_bibliography(&citations, refs, NUMERIC_NOSORT_STYLE).unwrap();
+
+        // Then: Alpha (cited first) should appear before Bravo in the bibliography
+        let alpha_pos = result.find("Alpha").expect("Alpha should appear in bibliography");
+        let bravo_pos = result.find("Bravo").expect("Bravo should appear in bibliography");
+        assert!(
+            alpha_pos < bravo_pos,
+            "Alpha (cited first) should appear before Bravo (cited second) in bibliography. Got:\n{}",
+            result
+        );
+    }
+
+    #[test]
+    fn test_format_bibliography_dedup_preserves_first_appearance() {
+        // Given: Ref A cited, then ref B, then ref A again
+        let refs = r#"[
+            {"id": "alpha", "type": "article-journal", "author": [{"family": "Alpha", "given": "A."}], "title": "Alpha Title", "issued": {"date-parts": [[2020]]}},
+            {"id": "bravo", "type": "article-journal", "author": [{"family": "Bravo", "given": "B."}], "title": "Bravo Title", "issued": {"date-parts": [[2021]]}}
+        ]"#;
+        let citations = vec![
+            Citation {
+                id: "alpha".to_string(),
+                locator: None,
+                label: None,
+                url: None,
+                span: (0, 10),
+            },
+            Citation {
+                id: "bravo".to_string(),
+                locator: None,
+                label: None,
+                url: None,
+                span: (20, 30),
+            },
+            Citation {
+                id: "alpha".to_string(),
+                locator: None,
+                label: None,
+                url: None,
+                span: (40, 50),
+            },
+        ];
+
+        // When: We format the bibliography
+        let result = format_bibliography(&citations, refs, NUMERIC_NOSORT_STYLE).unwrap();
+
+        // Then: Alpha=1, Bravo=2, and only 2 entries (no duplicate Alpha)
+        let entry_count = result.matches("csl-entry").count();
+        assert_eq!(
+            entry_count, 2,
+            "Expected 2 bibliography entries (no duplicates), got {} in:\n{}",
+            entry_count, result
+        );
+        let alpha_pos = result.find("Alpha").expect("Alpha should appear in bibliography");
+        let bravo_pos = result.find("Bravo").expect("Bravo should appear in bibliography");
+        assert!(
+            alpha_pos < bravo_pos,
+            "Alpha (first appearance) should come before Bravo in bibliography. Got:\n{}",
+            result
+        );
+    }
+
     #[test]
     fn test_format_bibliography_only_cited_refs() {
         // Given: Citations for only one of two available references

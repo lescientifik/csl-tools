@@ -8,7 +8,8 @@
 //! - Citations separated by punctuation or text are NOT grouped
 
 use csl_tools::{
-    extract_citation_clusters, format_citations_clusters, CitationCluster, CitationItem,
+    extract_citation_clusters, format_bibliography, format_citations_clusters, Citation,
+    CitationCluster, CitationItem,
 };
 
 // =============================================================================
@@ -560,6 +561,57 @@ fn test_format_author_date_grouped() {
         formatted.contains(";"),
         "Expected semicolon delimiter between grouped citations, got: {}",
         formatted
+    );
+}
+
+// =============================================================================
+// Tests for bibliography ordering (Issue #4)
+// =============================================================================
+
+/// Test: Bibliography order follows citation appearance order, not JSON order
+#[test]
+fn test_bibliography_order_matches_citation_appearance() {
+    // Given: 3 refs in JSON order [C, A, B], but cited in order [A, B, C]
+    let refs = r#"[
+        {"id": "charlie", "type": "article-journal", "author": [{"family": "Charlie", "given": "C."}], "title": "Charlie Title", "issued": {"date-parts": [[2022]]}},
+        {"id": "alpha", "type": "article-journal", "author": [{"family": "Alpha", "given": "A."}], "title": "Alpha Title", "issued": {"date-parts": [[2020]]}},
+        {"id": "bravo", "type": "article-journal", "author": [{"family": "Bravo", "given": "B."}], "title": "Bravo Title", "issued": {"date-parts": [[2021]]}}
+    ]"#;
+    let citations = vec![
+        Citation {
+            id: "alpha".to_string(),
+            locator: None,
+            label: None,
+            url: None,
+            span: (0, 10),
+        },
+        Citation {
+            id: "bravo".to_string(),
+            locator: None,
+            label: None,
+            url: None,
+            span: (20, 30),
+        },
+        Citation {
+            id: "charlie".to_string(),
+            locator: None,
+            label: None,
+            url: None,
+            span: (40, 50),
+        },
+    ];
+
+    // When: We format the bibliography with a numeric style (no sort in bibliography)
+    let result = format_bibliography(&citations, refs, NUMERIC_STYLE).unwrap();
+
+    // Then: Order in bibliography should be Alpha < Bravo < Charlie (citation appearance order)
+    let alpha_pos = result.find("Alpha").expect("Alpha should appear");
+    let bravo_pos = result.find("Bravo").expect("Bravo should appear");
+    let charlie_pos = result.find("Charlie").expect("Charlie should appear");
+    assert!(
+        alpha_pos < bravo_pos && bravo_pos < charlie_pos,
+        "Bibliography should follow citation order: Alpha(1) < Bravo(2) < Charlie(3). Got:\n{}",
+        result
     );
 }
 
