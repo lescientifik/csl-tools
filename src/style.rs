@@ -32,8 +32,16 @@ pub fn load_style(path: &Path) -> Result<String, StyleError> {
     Ok(content)
 }
 
+// Vancouver CSL style from https://github.com/citation-style-language/styles
+// Licensed under Creative Commons Attribution-ShareAlike 3.0 (CC-BY-SA 3.0)
+// Original authors: Michael Berkowitz, Sean Takats, Sebastian Karcher
+const VANCOUVER_STYLE: &str = include_str!("styles/vancouver.csl");
+
 /// Single source of truth for builtin styles: (name, CSL XML content).
-const BUILTIN_STYLES: &[(&str, &str)] = &[("minimal", MINIMAL_STYLE)];
+const BUILTIN_STYLES: &[(&str, &str)] = &[
+    ("minimal", MINIMAL_STYLE),
+    ("vancouver", VANCOUVER_STYLE),
+];
 
 /// Returns a built-in style by name.
 ///
