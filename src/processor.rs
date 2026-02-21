@@ -5,7 +5,7 @@
 
 use crate::markdown::Citation;
 use serde_json::Value;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use thiserror::Error;
 
 /// Errors that can occur during processing.
@@ -247,9 +247,6 @@ pub fn format_bibliography(
         return Ok(String::new());
     }
 
-    // Collect unique citation IDs
-    let cited_ids: HashSet<&str> = citations.iter().map(|c| c.id.as_str()).collect();
-
     // Parse the references JSON
     let all_refs: Value =
         serde_json::from_str(refs_json).map_err(|e| ProcessorError::InvalidJson(e.to_string()))?;
@@ -259,16 +256,22 @@ pub fn format_bibliography(
         ProcessorError::InvalidJson("References must be a JSON array".to_string())
     })?;
 
-    // Filter references to only include cited ones
-    let cited_refs: Vec<&Value> = all_refs
+    // Build refs index for O(1) lookup
+    let refs_by_id: HashMap<&str, &Value> = all_refs
         .iter()
-        .filter(|r| {
-            r.get("id")
-                .and_then(|id| id.as_str())
-                .map(|id| cited_ids.contains(id))
-                .unwrap_or(false)
-        })
+        .filter_map(|r| r.get("id").and_then(|id| id.as_str()).map(|id| (id, r)))
         .collect();
+
+    // Order refs by first appearance in text (citations is already in document order)
+    let mut seen = HashSet::new();
+    let mut cited_refs: Vec<&Value> = Vec::new();
+    for citation in citations {
+        if seen.insert(citation.id.as_str()) {
+            if let Some(&ref_item) = refs_by_id.get(citation.id.as_str()) {
+                cited_refs.push(ref_item);
+            }
+        }
+    }
 
     // If no cited references found, return empty
     if cited_refs.is_empty() {
