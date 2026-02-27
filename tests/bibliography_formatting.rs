@@ -5,7 +5,10 @@
 
 mod common;
 
-use csl_tools::{builtin_style, format_bibliography, Citation};
+use csl_tools::{
+    builtin_style, extract_citation_clusters, format_bibliography, format_citations_clusters,
+    Citation,
+};
 
 /// Helper: format a bibliography using Vancouver style and return the HTML output.
 fn vancouver_bibliography(refs_json: &str, citation_ids: &[&str]) -> String {
@@ -230,6 +233,67 @@ fn test_bibliography_sort_override_by_style() {
         alpha_pos < charlie_pos,
         "Style <sort> should override citation order: Alpha < Charlie. Got:\n{}",
         result
+    );
+}
+
+// =============================================================================
+// Issue #6: Bibliography truncated when using Pandoc citation syntax
+// =============================================================================
+
+/// When a document mixes individual citations `[@a]` with Pandoc grouped
+/// citations `[@b; @c; @d]`, the bibliography must include ALL cited
+/// references — not just those written in individual syntax.
+///
+/// Bug: `extract_citations` (used for bibliography) does not handle Pandoc
+/// syntax, so references cited only via `[@a; @b]` are silently dropped
+/// from the bibliography while their in-text numbers render correctly.
+#[test]
+fn test_bibliography_includes_pandoc_citations() {
+    // Given: 5 references, a document using both individual and Pandoc syntax
+    let refs = common::build_refs(&["ref-a", "ref-b", "ref-c", "ref-d", "ref-e"]);
+    let style = common::NUMERIC_STYLE;
+
+    //   ref-a cited individually, ref-b/ref-c/ref-d via Pandoc, ref-e individually
+    let markdown = "First [@ref-a]. Then [@ref-b; @ref-c; @ref-d]. Finally [@ref-e].";
+
+    // Step 1: extract clusters (used for in-text citations) — works correctly
+    let clusters = extract_citation_clusters(markdown);
+    let _processed = format_citations_clusters(&clusters, &refs, style).unwrap();
+
+    // Verify in-text citations found all 5 references
+    let cited_ids: Vec<String> = clusters
+        .iter()
+        .flat_map(|c| c.items.iter().map(|i| i.id.clone()))
+        .collect();
+    assert_eq!(cited_ids.len(), 5, "Clusters should contain 5 cited items");
+
+    // Step 2: derive citation list from clusters (the fix for issue #6)
+    let citations_for_bib: Vec<Citation> = clusters
+        .iter()
+        .flat_map(|cluster| {
+            cluster.items.iter().map(|item| Citation {
+                id: item.id.clone(),
+                locator: item.locator.clone(),
+                label: item.label.clone(),
+                url: item.url.clone(),
+                span: cluster.span,
+            })
+        })
+        .collect();
+
+    // Step 3: format bibliography
+    let bib = format_bibliography(&citations_for_bib, &refs, style).unwrap();
+
+    // Then: bibliography must contain ALL 5 references
+    let entry_count = bib.matches("csl-entry").count();
+    assert_eq!(
+        entry_count, 5,
+        "Bibliography should contain 5 entries (including Pandoc-cited refs), got {}.\n\
+         Citations for bib: {:?}\n\
+         Bibliography:\n{}",
+        entry_count,
+        citations_for_bib.iter().map(|c| &c.id).collect::<Vec<_>>(),
+        bib
     );
 }
 

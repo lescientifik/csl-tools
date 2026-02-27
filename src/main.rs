@@ -9,7 +9,7 @@ use std::process;
 use clap::{Parser, Subcommand};
 
 use csl_tools::{
-    builtin_style, extract_citation_clusters, extract_citations, format_bibliography,
+    builtin_style, extract_citation_clusters, format_bibliography,
     format_citations_clusters, generate_output, load_refs, load_style,
     processor::ProcessorError, replace_citations, style::builtin_style_names,
 };
@@ -237,7 +237,20 @@ fn process_command(
     let content = replace_citations(&markdown, &processed);
 
     // 7. Format bibliography
-    let citations = extract_citations(&markdown);
+    //    Derive citation list from clusters (not extract_citations) so that
+    //    Pandoc grouped citations [@a; @b; @c] are included in the bibliography.
+    let citations: Vec<csl_tools::Citation> = clusters
+        .iter()
+        .flat_map(|cluster| {
+            cluster.items.iter().map(|item| csl_tools::Citation {
+                id: item.id.clone(),
+                locator: item.locator.clone(),
+                label: item.label.clone(),
+                url: item.url.clone(),
+                span: cluster.span,
+            })
+        })
+        .collect();
     let bibliography = if no_bib {
         None
     } else {
